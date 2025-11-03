@@ -1,6 +1,6 @@
 import os
 import zipfile
-from flask import Flask, render_template, request, send_file, redirect, url_for, flash
+from flask import Flask, render_template, request, send_file, redirect, url_for, flash, session
 from werkzeug.utils import secure_filename
 from docx import Document
 from docx.shared import Inches, Pt
@@ -11,7 +11,7 @@ import shutil
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-here'
-app.config['UPLOAD_FOLDER'] = 'static/uploads'
+app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Ensure upload folder exists
@@ -110,8 +110,8 @@ def upload_file():
         
         try:
             # Get paths to company assets
-            logo_path = os.path.join('assets', 'company_logo.png')
-            font_path = os.path.join('assets', 'company_font.ttf')
+            logo_path = os.path.join(os.getcwd(), 'TPLogo11.png')
+            font_path = os.path.join(os.getcwd(), 'company_font.ttf')
             
             # Split the document
             output_files = split_docx(filepath, temp_dir, logo_path, font_path)
