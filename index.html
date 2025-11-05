@@ -298,8 +298,8 @@
                     <h5><i class="fas fa-info-circle me-2"></i>How It Works</h5>
                     <ul style="margin: 0; padding-left: 20px;">
                         <li>Upload your Word document (.docx)</li>
-                        <li>System splits every 2 pages into separate files</li>
-                        <li>Files are named using: Job Description + Client + Title + Version</li>
+                        <li>System splits by sections (3 sections = 2 pages = 1 JD)</li>
+                        <li>Files named: Job Description + Client + Title + Version</li>
                         <li>Download all files as a ZIP archive</li>
                     </ul>
                 </div>
@@ -327,7 +327,7 @@
                 <div class="progress-section" id="progress-section">
                     <div class="spinner"></div>
                     <h5 class="text-center mt-3">Processing your document...</h5>
-                    <p class="text-center text-muted">Extracting job descriptions and splitting pages...</p>
+                    <p class="text-center text-muted">Splitting by sections (3 sections = 1 JD)...</p>
                 </div>
 
                 <!-- Alert Container -->
@@ -458,17 +458,11 @@
             alertContainer.innerHTML = '';
 
             try {
-                // Read the file
                 const arrayBuffer = await selectedFile.arrayBuffer();
-                
-                // Load with JSZip
                 const docZip = await JSZip.loadAsync(arrayBuffer);
                 
-                // Get document.xml
-                const docXml = await docZip.file('word/document.xml').async('string');
-                
-                // Split document with smart naming
-                const splitFiles = await splitDocumentSmart(docZip, docXml);
+                // Split by sections (every 3 sections = 1 JD)
+                const splitFiles = await splitBySections(docZip);
                 processedFiles = splitFiles;
                 
                 // Show results
@@ -498,126 +492,52 @@
                 
                 progressSection.style.display = 'none';
                 resultSection.style.display = 'block';
-                showAlert('Document successfully split!', 'success');
+                showAlert(`Successfully created ${splitFiles.length} job description files!`, 'success');
             } catch (error) {
                 console.error('Error:', error);
                 progressSection.style.display = 'none';
-                showAlert('Error processing document: ' + error.message, 'danger');
+                showAlert('Error: ' + error.message, 'danger');
                 splitBtn.disabled = false;
             }
         });
 
-        function extractTextFromXml(xmlString) {
-            // Extract text content from Word XML
-            const textMatches = xmlString.match(/<w:t[^>]*>([^<]*)<\/w:t>/g);
-            if (!textMatches) return '';
-            
-            return textMatches
-                .map(match => match.replace(/<w:t[^>]*>|<\/w:t>/g, ''))
-                .join(' ')
-                .replace(/\s+/g, ' ')
-                .trim();
-        }
-
-        function extractJobInfo(text) {
-            // Extract client name, job title, and version from text
-            let clientName = 'Client';
-            let jobTitle = 'Position';
-            let version = '1';
-            
-            // Try to find client name (look for "Client name" or similar patterns)
-            const clientMatch = text.match(/Client\s*name[:\s]*([^\n\r]+)/i) || 
-                               text.match(/Company[:\s]*([^\n\r]+)/i);
-            if (clientMatch && clientMatch[1]) {
-                clientName = clientMatch[1].trim().substring(0, 50);
-            }
-            
-            // Try to find job title (look for "Job Description" followed by title)
-            const jobMatch = text.match(/Job\s*Description[:\s]*([^\n\r]+)/i) ||
-                            text.match(/Position[:\s]*([^\n\r]+)/i) ||
-                            text.match(/Title[:\s]*([^\n\r]+)/i);
-            if (jobMatch && jobMatch[1]) {
-                jobTitle = jobMatch[1].trim().substring(0, 50);
-            }
-            
-            // Try to find version
-            const versionMatch = text.match(/Version[:\s]*(\d+)/i) ||
-                                text.match(/V[:\s]*(\d+)/i);
-            if (versionMatch && versionMatch[1]) {
-                version = versionMatch[1];
-            }
-            
-            return { clientName, jobTitle, version };
-        }
-
-        function sanitizeFilename(filename) {
-            // Remove invalid characters from filename
-            return filename
-                .replace(/[<>:"/\\|?*]/g, '')
-                .replace(/\s+/g, ' ')
-                .trim()
-                .substring(0, 150); // Limit length
-        }
-
-        async function splitDocumentSmart(docZip, docXml) {
+        async function splitBySections(docZip) {
             const files = [];
+            
+            // Get document.xml
+            const docXml = await docZip.file('word/document.xml').async('string');
             
             // Parse XML
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(docXml, 'text/xml');
             const body = xmlDoc.getElementsByTagName('w:body')[0];
             
-            // Find all page breaks
-            const pageBreakIndices = [];
-            const paragraphs = Array.from(body.getElementsByTagName('w:p'));
+            // Find all section breaks (w:sectPr)
+            const allElements = Array.from(body.children);
+            const sectionBreakIndices = [];
             
-            paragraphs.forEach((para, index) => {
-                const breaks = para.getElementsByTagName('w:br');
-                for (let br of breaks) {
-                    const type = br.getAttribute('w:type');
-                    if (type === 'page') {
-                        pageBreakIndices.push(index);
-                    }
+            allElements.forEach((el, index) => {
+                // Check if element has sectPr
+                const sectPr = el.getElementsByTagName('w:sectPr');
+                if (sectPr.length > 0) {
+                    sectionBreakIndices.push(index);
                 }
             });
             
-            console.log(`Found ${pageBreakIndices.length} page breaks`);
-            console.log('Page break positions:', pageBreakIndices);
+            console.log(`Found ${sectionBreakIndices.length} section breaks`);
+            console.log('Section break positions:', sectionBreakIndices);
             
-            // If no page breaks found, estimate by content
-            if (pageBreakIndices.length === 0) {
-                const totalParas = paragraphs.length;
-                const parasPerPage = Math.ceil(totalParas / 46); // Assuming 46 JDs
-                for (let i = parasPerPage * 2; i < totalParas; i += parasPerPage * 2) {
-                    pageBreakIndices.push(i);
-                }
-            }
-            
-            // Group by 2 pages (every 2nd page break = 1 file)
-            const fileRanges = [];
+            // Group every 3 sections = 1 JD
+            const sectionsPerJD = 3;
             let startIdx = 0;
+            let jdNumber = 1;
             
-            for (let i = 1; i < pageBreakIndices.length; i += 2) {
-                const endIdx = pageBreakIndices[i];
-                fileRanges.push({ start: startIdx, end: endIdx });
-                startIdx = endIdx + 1;
-            }
-            
-            // Handle last file if needed
-            if (startIdx < paragraphs.length) {
-                fileRanges.push({ start: startIdx, end: paragraphs.length - 1 });
-            }
-            
-            console.log(`Creating ${fileRanges.length} files`);
-            
-            // Create a file for each range
-            for (let i = 0; i < fileRanges.length; i++) {
-                const range = fileRanges[i];
-                const chunk = paragraphs.slice(range.start, range.end + 1);
+            for (let i = sectionsPerJD - 1; i < sectionBreakIndices.length; i += sectionsPerJD) {
+                const endIdx = sectionBreakIndices[i];
+                const chunk = allElements.slice(startIdx, endIdx + 1);
                 
-                // Extract text from this chunk to get job info
-                const chunkXml = chunk.map(p => p.outerHTML).join('');
-                const chunkText = extractTextFromXml(chunkXml);
+                // Extract job info from this chunk
+                const chunkText = extractTextFromElements(chunk);
                 const jobInfo = extractJobInfo(chunkText);
                 
                 // Create filename
@@ -625,72 +545,148 @@
                     `Job Description - ${jobInfo.clientName} - ${jobInfo.jobTitle} - Version ${jobInfo.version}.docx`
                 );
                 
-                // Create new document
-                const newDoc = xmlDoc.cloneNode(true);
-                const newBody = newDoc.getElementsByTagName('w:body')[0];
+                // Create new document with this chunk
+                const blob = await createDocumentFromChunk(docZip, chunk, xmlDoc);
                 
-                // Clear body
-                while (newBody.firstChild) {
-                    newBody.removeChild(newBody.firstChild);
-                }
-                
-                // Add chunk paragraphs
-                chunk.forEach(para => {
-                    newBody.appendChild(para.cloneNode(true));
-                });
-                
-                // Add section properties if missing
-                if (!newBody.getElementsByTagName('w:sectPr').length) {
-                    const sectPr = body.getElementsByTagName('w:sectPr')[0];
-                    if (sectPr) {
-                        newBody.appendChild(sectPr.cloneNode(true));
-                    }
-                }
-                
-                // Serialize back to string
-                const serializer = new XMLSerializer();
-                const newDocXml = serializer.serializeToString(newDoc);
-                
-                // Create new zip
-                const newZip = new JSZip();
-                
-                // Copy all files from original
-                const copyPromises = [];
-                docZip.forEach((relativePath, file) => {
-                    if (relativePath === 'word/document.xml') {
-                        newZip.file(relativePath, newDocXml);
-                    } else {
-                        copyPromises.push(
-                            file.async('arraybuffer').then(content => {
-                                newZip.file(relativePath, content);
-                            })
-                        );
-                    }
-                });
-                
-                await Promise.all(copyPromises);
-                
-                // Generate blob
-                const blob = await newZip.generateAsync({type: 'blob'});
                 files.push({
                     name: filename,
                     blob: blob
                 });
+                
+                startIdx = endIdx + 1;
+                jdNumber++;
             }
             
+            // Handle remaining content if any
+            if (startIdx < allElements.length) {
+                const chunk = allElements.slice(startIdx);
+                if (chunk.length > 0) {
+                    const chunkText = extractTextFromElements(chunk);
+                    const jobInfo = extractJobInfo(chunkText);
+                    const filename = sanitizeFilename(
+                        `Job Description - ${jobInfo.clientName} - ${jobInfo.jobTitle} - Version ${jobInfo.version}.docx`
+                    );
+                    const blob = await createDocumentFromChunk(docZip, chunk, xmlDoc);
+                    files.push({ name: filename, blob: blob });
+                }
+            }
+            
+            console.log(`Created ${files.length} files`);
             return files;
+        }
+
+        function extractTextFromElements(elements) {
+            let text = '';
+            elements.forEach(el => {
+                const textNodes = el.getElementsByTagName('w:t');
+                for (let t of textNodes) {
+                    text += t.textContent + ' ';
+                }
+            });
+            return text.trim();
+        }
+
+        function extractJobInfo(text) {
+            let clientName = 'Unknown Client';
+            let jobTitle = 'Position';
+            let version = '1';
+            
+            // Look for client name - it appears after "Client name" text
+            // The pattern in your doc is just "Client name" as a label
+            // The actual client name follows in the next text elements
+            const lines = text.split(/[\r\n]+/);
+            
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                
+                // If we find "Client name", the next non-empty line is likely the actual client
+                if (line.toLowerCase().includes('client name') && i + 1 < lines.length) {
+                    const nextLine = lines[i + 1].trim();
+                    if (nextLine && nextLine.toLowerCase() !== 'client name') {
+                        clientName = nextLine.substring(0, 50);
+                    }
+                }
+                
+                // Look for job title after "Job Description"
+                if (line.toLowerCase().includes('job description') && i + 1 < lines.length) {
+                    const nextLine = lines[i + 1].trim();
+                    if (nextLine && nextLine.toLowerCase() !== 'job description') {
+                        jobTitle = nextLine.substring(0, 50);
+                    }
+                }
+                
+                // Look for version
+                const versionMatch = line.match(/version[:\s]*(\d+)/i);
+                if (versionMatch) {
+                    version = versionMatch[1];
+                }
+            }
+            
+            // Clean up extracted values
+            clientName = clientName.replace(/[<>:"/\\|?*]/g, '').trim() || 'Unknown Client';
+            jobTitle = jobTitle.replace(/[<>:"/\\|?*]/g, '').trim() || 'Position';
+            
+            return { clientName, jobTitle, version };
+        }
+
+        function sanitizeFilename(filename) {
+            return filename
+                .replace(/[<>:"/\\|?*]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .substring(0, 200);
+        }
+
+        async function createDocumentFromChunk(docZip, chunk, originalXmlDoc) {
+            // Clone the original XML document
+            const newDoc = originalXmlDoc.cloneNode(true);
+            const newBody = newDoc.getElementsByTagName('w:body')[0];
+            
+            // Clear body
+            while (newBody.firstChild) {
+                newBody.removeChild(newBody.firstChild);
+            }
+            
+            // Add chunk elements
+            chunk.forEach(el => {
+                newBody.appendChild(el.cloneNode(true));
+            });
+            
+            // Serialize to string
+            const serializer = new XMLSerializer();
+            const newDocXml = serializer.serializeToString(newDoc);
+            
+            // Create new zip
+            const newZip = new JSZip();
+            
+            // Copy all files from original
+            const copyPromises = [];
+            docZip.forEach((relativePath, file) => {
+                if (relativePath === 'word/document.xml') {
+                    newZip.file(relativePath, newDocXml);
+                } else {
+                    copyPromises.push(
+                        file.async('arraybuffer').then(content => {
+                            newZip.file(relativePath, content);
+                        })
+                    );
+                }
+            });
+            
+            await Promise.all(copyPromises);
+            
+            // Generate blob
+            return await newZip.generateAsync({type: 'blob'});
         }
 
         // Download button
         downloadBtn.addEventListener('click', async () => {
             const zip = new JSZip();
             
-            // Add all files to zip
             processedFiles.forEach(file => {
                 zip.file(file.name, file.blob);
             });
             
-            // Generate and download
             const zipBlob = await zip.generateAsync({type: 'blob'});
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
             saveAs(zipBlob, `TP_JobDescriptions_${timestamp}.zip`);
