@@ -298,9 +298,9 @@
                     <h5><i class="fas fa-info-circle me-2"></i>How It Works</h5>
                     <ul style="margin: 0; padding-left: 20px;">
                         <li>Upload your Word document (.docx)</li>
-                        <li>System finds each JD by detecting "Client name" markers</li>
-                        <li>Files named: Job Description + Client + Title + Version</li>
-                        <li>Download all files as a ZIP archive</li>
+                        <li>System finds "Client name – Job title" format</li>
+                        <li>Splits document at each occurrence (each JD = 2 pages)</li>
+                        <li>Downloads as ZIP with smart filenames</li>
                     </ul>
                 </div>
 
@@ -327,7 +327,7 @@
                 <div class="progress-section" id="progress-section">
                     <div class="spinner"></div>
                     <h5 class="text-center mt-3">Processing your document...</h5>
-                    <p class="text-center text-muted">Finding JD boundaries and extracting information...</p>
+                    <p class="text-center text-muted">Finding job descriptions...</p>
                 </div>
 
                 <!-- Alert Container -->
@@ -455,7 +455,7 @@
                 const arrayBuffer = await selectedFile.arrayBuffer();
                 const docZip = await JSZip.loadAsync(arrayBuffer);
                 
-                const splitFiles = await splitByClientNameMarkers(docZip);
+                const splitFiles = await splitByClientJobFormat(docZip);
                 processedFiles = splitFiles;
                 
                 fileCount.textContent = splitFiles.length;
@@ -492,7 +492,7 @@
             }
         });
 
-        async function splitByClientNameMarkers(docZip) {
+        async function splitByClientJobFormat(docZip) {
             const files = [];
             
             const docXml = await docZip.file('word/document.xml').async('string');
@@ -501,38 +501,44 @@
             const body = xmlDoc.getElementsByTagName('w:body')[0];
             const allElements = Array.from(body.children);
             
-            // Find all paragraphs that contain "Client name" text
-            const clientNameIndices = [];
+            // Find all paragraphs that contain "–" (en dash) which separates client name and job title
+            const jdStartIndices = [];
             
             allElements.forEach((el, index) => {
                 const textNodes = el.getElementsByTagName('w:t');
+                let fullText = '';
                 for (let t of textNodes) {
-                    const text = t.textContent.trim().toLowerCase();
-                    if (text === 'client name' || text.includes('client name')) {
-                        clientNameIndices.push(index);
-                        break;
-                    }
+                    fullText += t.textContent;
+                }
+                
+                // Look for lines that contain "–" (en dash) and are likely "Client – Job Title" format
+                // Exclude lines that are just the template labels
+                if (fullText.includes('–') && 
+                    fullText.toLowerCase() !== 'client name – job title' &&
+                    fullText.trim().length > 5) {
+                    jdStartIndices.push({ index: index, text: fullText.trim() });
                 }
             });
             
-            console.log(`Found ${clientNameIndices.length} "Client name" markers at positions:`, clientNameIndices);
+            console.log(`Found ${jdStartIndices.length} job descriptions`);
+            console.log('JD markers:', jdStartIndices.map(j => j.text));
             
-            if (clientNameIndices.length === 0) {
-                throw new Error('No "Client name" markers found in document. Cannot split.');
+            if (jdStartIndices.length === 0) {
+                throw new Error('No job descriptions found. Looking for format: "Client Name – Job Title"');
             }
             
-            // Split document at each "Client name" marker
-            for (let i = 0; i < clientNameIndices.length; i++) {
-                const startIdx = clientNameIndices[i];
-                const endIdx = (i + 1 < clientNameIndices.length) ? clientNameIndices[i + 1] : allElements.length;
+            // Split document at each JD marker
+            for (let i = 0; i < jdStartIndices.length; i++) {
+                const startIdx = jdStartIndices[i].index;
+                const endIdx = (i + 1 < jdStartIndices.length) ? jdStartIndices[i + 1].index : allElements.length;
                 
                 const chunk = allElements.slice(startIdx, endIdx);
                 
                 if (chunk.length === 0) continue;
                 
-                // Extract text from this chunk
-                const chunkText = extractTextFromElements(chunk);
-                const jobInfo = extractJobInfo(chunkText, chunk);
+                // Extract client name and job title from the marker line
+                const markerText = jdStartIndices[i].text;
+                const jobInfo = parseClientJobLine(markerText, chunk);
                 
                 // Create filename
                 const filename = sanitizeFilename(
@@ -545,8 +551,55 @@
                 files.push({ name: filename, blob: blob });
             }
             
-            console.log(`Created ${files.length} files from ${clientNameIndices.length} markers`);
+            console.log(`Created ${files.length} files`);
             return files;
+        }
+
+        function parseClientJobLine(line, elements) {
+            let clientName = 'Unknown Client';
+            let jobTitle = 'Position';
+            let version = '1';
+            
+            // Split by "–" (en dash)
+            const parts = line.split(/[–—-]/);  // Handle different dash types
+            
+            if (parts.length >= 2) {
+                clientName = parts[0].trim();
+                jobTitle = parts[1].trim();
+            } else if (parts.length === 1 && line.includes(':')) {
+                // Fallback: split by colon
+                const colonParts = line.split(':');
+                if (colonParts.length >= 2) {
+                    clientName = colonParts[0].trim();
+                    jobTitle = colonParts[1].trim();
+                }
+            }
+            
+            // Look for version in the chunk
+            const chunkText = extractTextFromElements(elements);
+            const versionMatch = chunkText.match(/version[:\s]*(\d+)/i);
+            if (versionMatch) {
+                version = versionMatch[1];
+            }
+            
+            // Clean up
+            clientName = clientName.replace(/[<>:"/\\|?*\r\n]/g, '').trim();
+            jobTitle = jobTitle.replace(/[<>:"/\\|?*\r\n]/g, '').trim();
+            
+            // Remove common label text if it leaked through
+            clientName = clientName.replace(/client\s*name/gi, '').trim();
+            jobTitle = jobTitle.replace(/job\s*title/gi, '').trim();
+            jobTitle = jobTitle.replace(/job\s*description/gi, '').trim();
+            
+            // Validate and set defaults
+            if (!clientName || clientName.length < 2) clientName = 'Unknown Client';
+            if (!jobTitle || jobTitle.length < 2) jobTitle = 'Position';
+            
+            // Limit length
+            if (clientName.length > 50) clientName = clientName.substring(0, 50);
+            if (jobTitle.length > 50) jobTitle = jobTitle.substring(0, 50);
+            
+            return { clientName, jobTitle, version };
         }
 
         function extractTextFromElements(elements) {
@@ -558,91 +611,6 @@
                 }
             });
             return text;
-        }
-
-        function extractJobInfo(fullText, elements) {
-            let clientName = '';
-            let jobTitle = '';
-            let version = '1';
-            
-            // Extract text from each paragraph separately to maintain structure
-            const paragraphTexts = [];
-            elements.forEach(el => {
-                const textNodes = el.getElementsByTagName('w:t');
-                let paraText = '';
-                for (let t of textNodes) {
-                    paraText += t.textContent;
-                }
-                if (paraText.trim()) {
-                    paragraphTexts.push(paraText.trim());
-                }
-            });
-            
-            // Find client name - should be right after "Client name" label
-            for (let i = 0; i < paragraphTexts.length; i++) {
-                const text = paragraphTexts[i].toLowerCase();
-                
-                // If this paragraph is "Client name", next non-empty paragraph is the actual client
-                if (text === 'client name' || text.includes('client name:')) {
-                    for (let j = i + 1; j < paragraphTexts.length && j < i + 5; j++) {
-                        const nextText = paragraphTexts[j].trim();
-                        if (nextText && 
-                            nextText.toLowerCase() !== 'client name' && 
-                            nextText.length > 2 &&
-                            nextText.length < 100) {
-                            clientName = nextText;
-                            break;
-                        }
-                    }
-                    if (!clientName && paragraphTexts[i].includes(':')) {
-                        // Client name might be on same line after colon
-                        const parts = paragraphTexts[i].split(':');
-                        if (parts.length > 1) {
-                            clientName = parts[1].trim();
-                        }
-                    }
-                }
-                
-                // Find job title - should be near or after "Job Description"
-                if (text.includes('job description') && text !== 'job description') {
-                    // Title might be on same line
-                    const afterDesc = text.substring(text.indexOf('job description') + 15).trim();
-                    if (afterDesc && afterDesc.length > 3 && afterDesc.length < 100) {
-                        jobTitle = afterDesc.replace(/[:\-–]/g, '').trim();
-                    }
-                }
-                
-                // Try next line after "Job Description"
-                if (text === 'job description' || text.includes('job description:')) {
-                    for (let j = i + 1; j < paragraphTexts.length && j < i + 5; j++) {
-                        const nextText = paragraphTexts[j].trim();
-                        if (nextText && 
-                            nextText.toLowerCase() !== 'job description' &&
-                            nextText.length > 3 &&
-                            nextText.length < 100 &&
-                            !nextText.toLowerCase().includes('client name')) {
-                            jobTitle = nextText;
-                            break;
-                        }
-                    }
-                }
-                
-                // Find version
-                const versionMatch = text.match(/version[:\s]*(\d+)/i);
-                if (versionMatch) {
-                    version = versionMatch[1];
-                }
-            }
-            
-            // Clean up
-            clientName = clientName.replace(/[<>:"/\\|?*\r\n]/g, '').trim() || 'Unknown Client';
-            jobTitle = jobTitle.replace(/[<>:"/\\|?*\r\n]/g, '').trim() || 'Position';
-            
-            // Limit length
-            if (clientName.length > 50) clientName = clientName.substring(0, 50);
-            if (jobTitle.length > 50) jobTitle = jobTitle.substring(0, 50);
-            
-            return { clientName, jobTitle, version };
         }
 
         function sanitizeFilename(filename) {
