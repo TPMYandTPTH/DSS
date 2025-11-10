@@ -492,13 +492,47 @@
             const body = xmlDoc.getElementsByTagName('w:body')[0];
             const allParagraphs = Array.from(body.getElementsByTagName('w:p'));
             
-            // Get header files and create mapping
-            const headerFiles = Object.keys(docZip.files).filter(f => f.startsWith('word/header') && f.endsWith('.xml') && !f.includes('_rels'));
-            console.log('Header files:', headerFiles);
+            // Build rId to header file mapping
+            const relsXml = await docZip.file('word/_rels/document.xml.rels').async('string');
+            const relsDoc = parser.parseFromString(relsXml, 'text/xml');
+            const relationships = relsDoc.getElementsByTagName('Relationship');
+            
+            const ridToHeader = {};
+            for (let rel of relationships) {
+                const relId = rel.getAttribute('Id');
+                const target = rel.getAttribute('Target');
+                if (target && target.includes('header')) {
+                    ridToHeader[relId] = 'word/' + target;
+                }
+            }
+            
+            console.log('rId to Header mapping:', ridToHeader);
+            
+            // Build section map - find all section breaks
+            const sections = [];
+            for (let i = 0; i < allParagraphs.length; i++) {
+                const para = allParagraphs[i];
+                const sectPr = para.getElementsByTagName('w:sectPr');
+                
+                if (sectPr.length > 0) {
+                    const headerRef = sectPr[0].getElementsByTagName('w:headerReference');
+                    if (headerRef.length > 0) {
+                        const rId = headerRef[0].getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+                        const headerFile = ridToHeader[rId];
+                        sections.push({
+                            endPara: i,
+                            rId: rId,
+                            headerFile: headerFile
+                        });
+                        console.log(`Section ends at para ${i}, rId=${rId}, header=${headerFile}`);
+                    }
+                }
+            }
             
             // Extract codes from all headers
             const headerCodes = {};
-            for (const headerFile of headerFiles) {
+            for (const rId in ridToHeader) {
+                const headerFile = ridToHeader[rId];
                 const code = await extractJobCodeFromHeader(docZip, headerFile);
                 headerCodes[headerFile] = code;
                 console.log(`${headerFile} -> ${code}`);
@@ -541,18 +575,31 @@
                     const hasDash = clientJobText.includes('-') || clientJobText.includes('–') || clientJobText.includes('—');
                     
                     if (clientJobText && hasDash && clientJobText.length > 3 && clientJobText.length < 100) {
-                        // Find which section this belongs to
-                        const sectionIdx = getSectionIndexForParagraph(allParagraphs, i);
-                        const headerFile = headerFiles[sectionIdx] || headerFiles[0];
+                        // Find which section this paragraph belongs to
+                        // The section is determined by the NEXT section break AT OR AFTER this paragraph
+                        let headerFile = null;
+                        for (let section of sections) {
+                            if (i <= section.endPara) {
+                                headerFile = section.headerFile;
+                                break;
+                            }
+                        }
+                        
+                        // If no section found, use the last section (or first)
+                        if (!headerFile && sections.length > 0) {
+                            headerFile = sections[sections.length - 1].headerFile;
+                        }
+                        
                         const jobCode = headerCodes[headerFile] || 'UNKNOWN';
                         
                         jdMarkers.push({
                             paraIndex: i,
                             text: clientJobText,
-                            jobCode: jobCode
+                            jobCode: jobCode,
+                            headerFile: headerFile
                         });
                         
-                        console.log(`Found marker at para ${i}: "${clientJobText}" - Code: ${jobCode}`);
+                        console.log(`Found marker at para ${i}: "${clientJobText}" - Header: ${headerFile} - Code: ${jobCode}`);
                     }
                 }
             }
@@ -593,19 +640,6 @@
             }
             
             return files;
-        }
-
-        function getSectionIndexForParagraph(allParagraphs, paraIndex) {
-            // Count section breaks before this paragraph
-            let sectionCount = 0;
-            for (let i = 0; i < paraIndex; i++) {
-                const para = allParagraphs[i];
-                const sectPr = para.getElementsByTagName('w:sectPr');
-                if (sectPr.length > 0) {
-                    sectionCount++;
-                }
-            }
-            return sectionCount;
         }
 
         async function extractJobCodeFromHeader(docZip, headerFile) {
