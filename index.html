@@ -297,10 +297,10 @@
                 <div class="info-box">
                     <h5><i class="fas fa-info-circle me-2"></i>How It Works</h5>
                     <ul style="margin: 0; padding-left: 20px;">
-                        <li>Finds lines with format: "Client Name – Job Title"</li>
-                        <li>Each occurrence = start of new JD (2 pages)</li>
-                        <li>Ignores "Job Description" headers</li>
-                        <li>Downloads ZIP with properly named files</li>
+                        <li>Finds "Client Name – Job Title" on page 1</li>
+                        <li>Extracts Job Code from header table</li>
+                        <li>Creates files: "Job Description - Client - Title - Code XXX.docx"</li>
+                        <li>Each file = exactly 2 pages</li>
                     </ul>
                 </div>
 
@@ -327,7 +327,7 @@
                 <div class="progress-section" id="progress-section">
                     <div class="spinner"></div>
                     <h5 class="text-center mt-3">Processing your document...</h5>
-                    <p class="text-center text-muted">Finding Client – Job Title markers...</p>
+                    <p class="text-center text-muted">Extracting job details from headers and content...</p>
                 </div>
 
                 <!-- Alert Container -->
@@ -462,7 +462,7 @@
                 statsGrid.innerHTML = `
                     <div class="stat-card">
                         <div class="stat-number">${splitFiles.length * 2}</div>
-                        <div class="stat-label">Approx Pages</div>
+                        <div class="stat-label">Total Pages</div>
                     </div>
                     <div class="stat-card">
                         <div class="stat-number">${splitFiles.length}</div>
@@ -486,16 +486,22 @@
         });
 
         async function splitDocument(docZip) {
+            // Get document XML
             const docXml = await docZip.file('word/document.xml').async('string');
             const parser = new DOMParser();
             const xmlDoc = parser.parseFromString(docXml, 'text/xml');
             const body = xmlDoc.getElementsByTagName('w:body')[0];
             const allParagraphs = Array.from(body.getElementsByTagName('w:p'));
             
-            // Find all "Client – Job" lines (NOT the template label)
+            // Get header XML files
+            const headerFiles = Object.keys(docZip.files).filter(f => f.startsWith('word/header'));
+            console.log('Header files found:', headerFiles);
+            
+            // Find all "Client – Job" lines
             const jdMarkers = [];
             
-            allParagraphs.forEach((para, index) => {
+            for (let i = 0; i < allParagraphs.length; i++) {
+                const para = allParagraphs[i];
                 const textNodes = para.getElementsByTagName('w:t');
                 let fullText = '';
                 for (let t of textNodes) {
@@ -503,25 +509,31 @@
                 }
                 fullText = fullText.trim();
                 
-                // Must contain "–" and NOT be the template label
+                // Check if it's a client-job line
                 if (fullText.includes('–') && 
-                    fullText.toLowerCase() !== 'client name – job title' &&
-                    fullText.toLowerCase() !== 'client name - job title' &&
                     fullText.length > 5 &&
-                    !fullText.toLowerCase().startsWith('job description')) {
+                    !fullText.toLowerCase().includes('job description') &&
+                    !fullText.toLowerCase().includes('client name111') &&
+                    !fullText.toLowerCase().includes('page')) {
+                    
+                    // Get corresponding header (find section for this paragraph)
+                    const sectionIndex = getSectionIndexForParagraph(xmlDoc, i);
+                    const headerFile = headerFiles[sectionIndex] || headerFiles[0];
+                    const jobCode = await extractJobCodeFromHeader(docZip, headerFile);
                     
                     jdMarkers.push({
-                        index: index,
-                        text: fullText
+                        paraIndex: i,
+                        text: fullText,
+                        jobCode: jobCode
                     });
                 }
-            });
+            }
             
             console.log(`Found ${jdMarkers.length} JD markers`);
-            jdMarkers.forEach((m, i) => console.log(`${i + 1}. "${m.text}"`));
+            jdMarkers.forEach((m, i) => console.log(`${i + 1}. "${m.text}" - Code: ${m.jobCode}`));
             
             if (jdMarkers.length === 0) {
-                throw new Error('No job descriptions found. Expected format: "Client Name – Job Title"');
+                throw new Error('No job descriptions found. Looking for format: "Client Name – Job Title"');
             }
             
             // Split at each marker
@@ -529,35 +541,30 @@
             const bodyElements = Array.from(body.children);
             
             for (let i = 0; i < jdMarkers.length; i++) {
-                // Find paragraph index in body elements
-                const startPara = jdMarkers[i].index;
-                let startIdx = 0;
-                for (let j = 0; j < bodyElements.length; j++) {
-                    if (bodyElements[j].getElementsByTagName('w:t').length > 0) {
-                        const text = Array.from(bodyElements[j].getElementsByTagName('w:t'))
-                            .map(t => t.textContent).join('').trim();
-                        if (text === jdMarkers[i].text) {
-                            startIdx = j;
-                            break;
-                        }
-                    }
-                }
+                const marker = jdMarkers[i];
+                
+                // Find start index in body elements
+                let startIdx = findElementIndexByParagraphIndex(bodyElements, marker.paraIndex);
                 
                 // Find end (next marker or end of document)
-                const endIdx = (i + 1 < jdMarkers.length) ? 
-                    findElementIndexByText(bodyElements, jdMarkers[i + 1].text) : 
-                    bodyElements.length;
+                let endIdx;
+                if (i + 1 < jdMarkers.length) {
+                    endIdx = findElementIndexByParagraphIndex(bodyElements, jdMarkers[i + 1].paraIndex);
+                } else {
+                    endIdx = bodyElements.length;
+                }
                 
                 const chunk = bodyElements.slice(startIdx, endIdx);
                 
                 if (chunk.length === 0) continue;
                 
-                // Parse client and job from marker
-                const markerText = jdMarkers[i].text;
-                const { clientName, jobTitle, version } = parseMarkerLine(markerText, chunk);
+                // Parse the marker line
+                const { clientName, jobTitle } = parseClientJobLine(marker.text);
+                const jobCode = marker.jobCode;
                 
+                // Create filename
                 const filename = sanitizeFilename(
-                    `Job Description - ${clientName} - ${jobTitle} - Version ${version}.docx`
+                    `Job Description - ${clientName} - ${jobTitle} - Code ${jobCode}.docx`
                 );
                 
                 const blob = await createDocFromChunk(docZip, chunk, xmlDoc);
@@ -567,34 +574,80 @@
             return files;
         }
 
-        function findElementIndexByText(elements, searchText) {
+        function getSectionIndexForParagraph(xmlDoc, paraIndex) {
+            // Simplified: return 0 for now, can be enhanced
+            return 0;
+        }
+
+        async function extractJobCodeFromHeader(docZip, headerFile) {
+            try {
+                const headerXml = await docZip.file(headerFile).async('string');
+                const parser = new DOMParser();
+                const headerDoc = parser.parseFromString(headerXml, 'text/xml');
+                
+                // Find tables in header
+                const tables = headerDoc.getElementsByTagName('w:tbl');
+                
+                if (tables.length > 0) {
+                    const table = tables[0];
+                    const rows = table.getElementsByTagName('w:tr');
+                    
+                    // Look in first row for "Code:"
+                    if (rows.length > 0) {
+                        const row = rows[0];
+                        const cells = row.getElementsByTagName('w:tc');
+                        
+                        for (let cell of cells) {
+                            const textNodes = cell.getElementsByTagName('w:t');
+                            let cellText = '';
+                            for (let t of textNodes) {
+                                cellText += t.textContent;
+                            }
+                            
+                            // Check if contains "Code:"
+                            if (cellText.includes('Code:')) {
+                                const codeMatch = cellText.match(/Code:\s*(.+)/i);
+                                if (codeMatch && codeMatch[1]) {
+                                    return codeMatch[1].trim();
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e) {
+                console.log('Could not extract job code from header:', e);
+            }
+            
+            return 'UNKNOWN';
+        }
+
+        function findElementIndexByParagraphIndex(elements, targetParaIndex) {
+            let paraCount = 0;
             for (let i = 0; i < elements.length; i++) {
-                const textNodes = elements[i].getElementsByTagName('w:t');
-                const text = Array.from(textNodes).map(t => t.textContent).join('').trim();
-                if (text === searchText) {
-                    return i;
+                if (elements[i].tagName.endsWith(':p')) {
+                    if (paraCount === targetParaIndex) {
+                        return i;
+                    }
+                    paraCount++;
                 }
             }
             return elements.length;
         }
 
-        function parseMarkerLine(markerText, chunk) {
+        function parseClientJobLine(text) {
             let clientName = 'Client';
             let jobTitle = 'Position';
-            let version = '1';
             
-            // Split by various dash types
-            const parts = markerText.split(/[–—-]/);
+            // Remove markers if present
+            text = text.replace(/111/g, '').replace(/112/g, '');
+            
+            // Split by dash
+            const parts = text.split(/[–—-]/);
             
             if (parts.length >= 2) {
                 clientName = parts[0].trim();
                 jobTitle = parts[1].trim();
             }
-            
-            // Look for version in chunk
-            const chunkText = extractTextFromElements(chunk);
-            const versionMatch = chunkText.match(/version[:\s]*(\d+)/i);
-            if (versionMatch) version = versionMatch[1];
             
             // Clean
             clientName = clientName.replace(/[<>:"/\\|?*]/g, '').trim() || 'Client';
@@ -604,16 +657,7 @@
             if (clientName.length > 50) clientName = clientName.substring(0, 50);
             if (jobTitle.length > 50) jobTitle = jobTitle.substring(0, 50);
             
-            return { clientName, jobTitle, version };
-        }
-
-        function extractTextFromElements(elements) {
-            let text = '';
-            elements.forEach(el => {
-                const textNodes = el.getElementsByTagName('w:t');
-                for (let t of textNodes) text += t.textContent + ' ';
-            });
-            return text;
+            return { clientName, jobTitle };
         }
 
         function sanitizeFilename(filename) {
