@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TP - Document Divider System</title>
+    <link rel="icon" type="image/png" href="TPLogo11.png">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            background-color: #f5f5f5;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+        }
+
+        .main-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            overflow: hidden;
+            margin-top: 20px;
+        }
+
+        .header-section {
+            background-color: #2c3e50;
+            padding: 40px 20px;
+            text-align: center;
+            color: white;
+        }
+
+        .logo {
+            max-width: 150px;
+            height: auto;
+            margin-bottom: 20px;
+        }
+
+        .header-section h1 {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 0;
+            letter-spacing: 3px;
+        }
+
+        .header-section p {
+            font-size: 1.1rem;
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+
+        .content-section {
+            padding: 40px;
+        }
+
+        .upload-zone {
+            border: 3px dashed #cbd5e0;
+            border-radius: 12px;
+            padding: 50px 20px;
+            text-align: center;
+            cursor: pointer;
+            background: #fafafa;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+        }
+
+        .upload-zone:hover {
+            border-color: #3498db;
+            background: #f0f8ff;
+            transform: translateY(-2px);
+        }
+
+        .upload-zone.dragover {
+            border-color: #2c3e50;
+            background: #e8f4f8;
+        }
+
+        .upload-icon {
+            font-size: 4rem;
+            color: #3498db;
+            margin-bottom: 20px;
+        }
+
+        .btn-custom {
+            padding: 15px 40px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary-custom {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .btn-primary-custom:hover:not(:disabled) {
+            background-color: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+        }
+
+        .btn-primary-custom:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .btn-secondary-custom {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary-custom:hover {
+            background-color: #5a6268;
+        }
+
+        .progress-section {
+            display: none;
+            margin: 30px 0;
+            text-align: center;
+        }
+
+        .result-section {
+            display: none;
+            text-align: center;
+            padding: 30px;
+            background-color: #e8f5e9;
+            border-radius: 12px;
+            margin-top: 30px;
+        }
+
+        .result-icon {
+            font-size: 5rem;
+            color: #4caf50;
+            margin-bottom: 20px;
+        }
+
+        .file-count {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #2c3e50;
+            margin: 20px 0;
+        }
+
+        .info-box {
+            background-color: #e3f2fd;
+            border-left: 5px solid #3498db;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 30px 0;
+        }
+
+        .info-box h5 {
+            color: #2c3e50;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        footer {
+            background: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 12px;
+            margin-top: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #3498db;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 8px;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .file-name {
+            margin-top: 15px;
+            font-weight: 600;
+            color: #2c3e50;
+            word-break: break-all;
+        }
+
+        .spinner {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .alert-custom {
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin: 20px 0;
+        }
+
+        .file-list {
+            text-align: left;
+            max-height: 400px;
+            overflow-y: auto;
+            margin: 20px 0;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .file-list-item {
+            padding: 8px;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.9rem;
+        }
+
+        .file-list-item:last-child {
+            border-bottom: none;
+        }
+
+        @media (max-width: 768px) {
+            .header-section h1 {
+                font-size: 2rem;
+            }
+            .content-section {
+                padding: 20px;
+            }
+            .btn-custom {
+                padding: 12px 30px;
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="main-card">
+            <!-- Header Section -->
+            <div class="header-section">
+                <img src="TPLogo11.png" alt="TP Logo" class="logo" onerror="this.style.display='none'">
+                <h1>DDS</h1>
+                <p>Document Divider System</p>
+                <p style="font-size: 0.95rem; margin-top: 5px;">Split your Word documents into 2-page job descriptions</p>
+            </div>
+
+            <!-- Content Section -->
+            <div class="content-section">
+                <!-- Info Box -->
+                <div class="info-box">
+                    <h5><i class="fas fa-info-circle me-2"></i>How It Works</h5>
+                    <ul style="margin: 0; padding-left: 20px;">
+                        <li>Finds paragraphs with "Job Summary / Overview" + Client-Job title</li>
+                        <li>Extracts Job Code from header table</li>
+                        <li>Creates files: "Client - Job Title - Code.docx"</li>
+                        <li>Each file = exactly 2 pages</li>
+                    </ul>
+                </div>
+
+                <!-- Upload Zone -->
+                <div class="upload-zone" id="upload-zone">
+                    <div class="upload-icon">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                    </div>
+                    <h4>Drop your file here or click to browse</h4>
+                    <p class="text-muted mt-2">Supported format: .docx (Max 50MB)</p>
+                    <p class="file-name" id="file-name"></p>
+                </div>
+
+                <input type="file" id="file-input" accept=".docx">
+
+                <!-- Action Button -->
+                <div class="text-center">
+                    <button class="btn-custom btn-primary-custom" id="split-btn" disabled>
+                        <i class="fas fa-cut me-2"></i>Split Document
+                    </button>
+                </div>
+
+                <!-- Progress Section -->
+                <div class="progress-section" id="progress-section">
+                    <div class="spinner"></div>
+                    <h5 class="text-center mt-3">Processing your document...</h5>
+                    <p class="text-center text-muted">Check browser console (F12) for detailed logs</p>
+                </div>
+
+                <!-- Alert Container -->
+                <div id="alert-container"></div>
+
+                <!-- Result Section -->
+                <div class="result-section" id="result-section">
+                    <div class="result-icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                    <h3>Processing Complete!</h3>
+                    <div class="file-count" id="file-count">0</div>
+                    <p class="lead">Individual job descriptions created</p>
+                    
+                    <div class="stats-grid" id="stats-grid"></div>
+
+                    <div class="file-list" id="file-list"></div>
+
+                    <div class="mt-4">
+                        <button class="btn-custom btn-primary-custom" id="download-btn">
+                            <i class="fas fa-download me-2"></i>Download All Files (ZIP)
+                        </button>
+                    </div>
+
+                    <button class="btn-custom btn-secondary-custom mt-3" id="reset-btn">
+                        <i class="fas fa-redo me-2"></i>Process Another Document
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <div class="row align-items-center">
+                <div class="col-md-6 text-center text-md-start">
+                    <p class="mb-0" style="color: #2c3e50; font-weight: 600;">
+                        © <span id="current-year"></span> TP. All rights reserved.
+                    </p>
+                </div>
+                <div class="col-md-6 text-center text-md-end">
+                    <p class="mb-0" style="color: #3498db; font-weight: bold; font-size: 1.1rem;">
+                        #MoreTogether
+                    </p>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('current-year').textContent = new Date().getFullYear();
+
+        const fileInput = document.getElementById('file-input');
+        const uploadZone = document.getElementById('upload-zone');
+        const fileName = document.getElementById('file-name');
+        const splitBtn = document.getElementById('split-btn');
+        const progressSection = document.getElementById('progress-section');
+        const resultSection = document.getElementById('result-section');
+        const fileCount = document.getElementById('file-count');
+        const downloadBtn = document.getElementById('download-btn');
+        const resetBtn = document.getElementById('reset-btn');
+        const alertContainer = document.getElementById('alert-container');
+        const statsGrid = document.getElementById('stats-grid');
+        const fileList = document.getElementById('file-list');
+
+        let selectedFile = null;
+        let processedFiles = [];
+
+        uploadZone.addEventListener('click', () => fileInput.click());
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadZone.classList.add('dragover');
+        });
+        uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                fileInput.files = e.dataTransfer.files;
+                handleFileSelect();
+            }
+        });
+
+        fileInput.addEventListener('change', handleFileSelect);
+
+        function handleFileSelect() {
+            if (fileInput.files.length > 0) {
+                selectedFile = fileInput.files[0];
+                const sizeMB = (selectedFile.size / 1024 / 1024).toFixed(2);
+                
+                if (!selectedFile.name.endsWith('.docx')) {
+                    showAlert('Please select a valid Word document (.docx)', 'danger');
+                    resetFileInput();
+                    return;
+                }
+                
+                fileName.textContent = `${selectedFile.name} (${sizeMB} MB)`;
+                splitBtn.disabled = false;
+            } else {
+                resetFileInput();
+            }
+        }
+
+        function resetFileInput() {
+            selectedFile = null;
+            fileName.textContent = '';
+            splitBtn.disabled = true;
+        }
+
+        splitBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            splitBtn.disabled = true;
+            progressSection.style.display = 'block';
+            resultSection.style.display = 'none';
+            alertContainer.innerHTML = '';
+
+            console.log('='.repeat(80));
+            console.log('STARTING DOCUMENT PROCESSING');
+            console.log('='.repeat(80));
+
+            try {
+                const arrayBuffer = await selectedFile.arrayBuffer();
+                const docZip = await JSZip.loadAsync(arrayBuffer);
+                const splitFiles = await splitDocument(docZip);
+                processedFiles = splitFiles;
+                
+                fileCount.textContent = splitFiles.length;
+                
+                let fileListHtml = '<strong>Created Files:</strong><br>';
+                splitFiles.forEach((file, index) => {
+                    fileListHtml += `<div class="file-list-item">${index + 1}. ${file.name}</div>`;
+                });
+                fileList.innerHTML = fileListHtml;
+                
+                statsGrid.innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-number">${splitFiles.length * 2}</div>
+                        <div class="stat-label">Total Pages</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">${splitFiles.length}</div>
+                        <div class="stat-label">Files Created</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number">2</div>
+                        <div class="stat-label">Pages per File</div>
+                    </div>
+                `;
+                
+                progressSection.style.display = 'none';
+                resultSection.style.display = 'block';
+                showAlert(`Successfully created ${splitFiles.length} files!`, 'success');
+            } catch (error) {
+                console.error('ERROR:', error);
+                progressSection.style.display = 'none';
+                showAlert('Error: ' + error.message, 'danger');
+                splitBtn.disabled = false;
+            }
+        });
+
+        // Helper function to get all text from an element
+        function getAllText(element) {
+            let text = '';
+            const textNodes = element.querySelectorAll('*');
+            for (let node of textNodes) {
+                if (node.tagName && node.tagName.toLowerCase().endsWith(':t')) {
+                    text += node.textContent || '';
+                }
+            }
+            return text;
+        }
+
+        // Helper function to get text from last N runs
+        function getTextFromLastRuns(para, numRuns = 5) {
+            const runs = para.querySelectorAll('*');
+            const runElements = [];
+            
+            for (let elem of runs) {
+                if (elem.tagName && elem.tagName.toLowerCase().endsWith(':r')) {
+                    runElements.push(elem);
+                }
+            }
+            
+            let text = '';
+            const startIdx = Math.max(0, runElements.length - numRuns);
+            for (let i = startIdx; i < runElements.length; i++) {
+                text += getAllText(runElements[i]);
+            }
+            
+            return text;
+        }
+
+        async function splitDocument(docZip) {
+            console.log('\n' + '='.repeat(80));
+            console.log('STEP 1: LOADING DOCUMENT XML');
+            console.log('='.repeat(80));
+            
+            const docXml = await docZip.file('word/document.xml').async('string');
+            const parser = new DOMParser();
+            const xmlDoc = parser.parseFromString(docXml, 'text/xml');
+            const body = xmlDoc.querySelector('body') || xmlDoc.documentElement;
+            
+            // Get all paragraphs
+            const allElements = body.querySelectorAll('*');
+            const allParagraphs = [];
+            for (let elem of allElements) {
+                if (elem.tagName && elem.tagName.toLowerCase().endsWith(':p')) {
+                    allParagraphs.push(elem);
+                }
+            }
+            
+            console.log(`Total paragraphs found: ${allParagraphs.length}`);
+            
+            // STEP 2: Build rId to header mapping
+            console.log('\n' + '='.repeat(80));
+            console.log('STEP 2: BUILDING RID TO HEADER MAPPING');
+            console.log('='.repeat(80));
+            
+            const relsXml = await docZip.file('word/_rels/document.xml.rels').async('string');
+            const relsDoc = parser.parseFromString(relsXml, 'text/xml');
+            const relationships = relsDoc.querySelectorAll('Relationship');
+            
+            const ridToHeader = {};
+            for (let rel of relationships) {
+                const relId = rel.getAttribute('Id');
+                const target = rel.getAttribute('Target');
+                if (target && target.includes('header')) {
+                    ridToHeader[relId] = 'word/' + target;
+                    console.log(`  ${relId} -> ${ridToHeader[relId]}`);
+                }
+            }
+            
+            // STEP 3: Build section map
+            console.log('\n' + '='.repeat(80));
+            console.log('STEP 3: BUILDING SECTION MAP');
+            console.log('='.repeat(80));
+            
+            const sections = [];
+            for (let i = 0; i < allParagraphs.length; i++) {
+                const para = allParagraphs[i];
+                const sectPrElements = para.querySelectorAll('*');
+                
+                for (let elem of sectPrElements) {
+                    if (elem.tagName && elem.tagName.toLowerCase().endsWith(':sectpr')) {
+                        // Found section properties
+                        const headerRefs = elem.querySelectorAll('*');
+                        for (let headerRef of headerRefs) {
+                            if (headerRef.tagName && headerRef.tagName.toLowerCase().endsWith(':headerreference')) {
+                                // Get the rId attribute
+                                const rId = headerRef.getAttribute('r:id') || 
+                                           headerRef.getAttribute('w:id') ||
+                                           headerRef.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+                                
+                                if (rId && ridToHeader[rId]) {
+                                    const headerFile = ridToHeader[rId];
+                                    sections.push({
+                                        endPara: i,
+                                        rId: rId,
+                                        headerFile: headerFile
+                                    });
+                                    console.log(`  Section ends at para ${i}: rId=${rId}, header=${headerFile}`);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            console.log(`Total sections found: ${sections.length}`);
+            
+            // STEP 4: Extract codes from headers
+            console.log('\n' + '='.repeat(80));
+            console.log('STEP 4: EXTRACTING CODES FROM HEADERS');
+            console.log('='.repeat(80));
+            
+            const headerCodes = {};
+            for (const rId in ridToHeader) {
+                const headerFile = ridToHeader[rId];
+                const code = await extractJobCodeFromHeader(docZip, headerFile);
+                headerCodes[headerFile] = code;
+                console.log(`  ${headerFile} -> ${code}`);
+            }
+            
+            // STEP 5: Find marker paragraphs
+            console.log('\n' + '='.repeat(80));
+            console.log('STEP 5: FINDING MARKER PARAGRAPHS');
+            console.log('='.repeat(80));
+            
+            const jdMarkers = [];
+            let jobSummaryCount = 0;
+            
+            for (let i = 0; i < allParagraphs.length; i++) {
+                const para = allParagraphs[i];
+                const fullText = getAllText(para);
+                
+                // Check if contains "Job Summary / Overview" or "Job Summary/ Overview"
+                if ((fullText.includes('Job Summary / Overview') || fullText.includes('Job Summary/ Overview')) &&
+                    fullText.length > 30) {  // Must have more content than just the marker
+                    
+                    jobSummaryCount++;
+                    console.log(`\nPara ${i}: Contains "Job Summary / Overview"`);
+                    console.log(`  Full text (first 100 chars): ${fullText.substring(0, 100)}...`);
+                    
+                    // Extract text from last runs
+                    const lastRunsText = getTextFromLastRuns(para, 8);
+                    console.log(`  Last runs text: "${lastRunsText}"`);
+                    
+                    // Clean up - remove "Job Summary / Overview"
+                    let clientJobText = lastRunsText.replace(/Job Summary\s*\/?\s*Overview/gi, '').trim();
+                    console.log(`  After cleanup: "${clientJobText}"`);
+                    
+                    // Check if has dash and valid length
+                    const hasDash = clientJobText.includes('-') || clientJobText.includes('–') || clientJobText.includes('—');
+                    console.log(`  Has dash: ${hasDash}, Length: ${clientJobText.length}`);
+                    
+                    if (clientJobText && hasDash && clientJobText.length > 3 && clientJobText.length < 100) {
+                        // Find which section this belongs to
+                        let headerFile = null;
+                        for (let section of sections) {
+                            if (i <= section.endPara) {
+                                headerFile = section.headerFile;
+                                console.log(`  Mapped to section ending at para ${section.endPara}: ${headerFile}`);
+                                break;
+                            }
+                        }
+                        
+                        if (!headerFile && sections.length > 0) {
+                            headerFile = sections[0].headerFile;
+                            console.log(`  No section found, using first: ${headerFile}`);
+                        }
+                        
+                        const jobCode = headerCodes[headerFile] || 'UNKNOWN';
+                        
+                        jdMarkers.push({
+                            paraIndex: i,
+                            text: clientJobText,
+                            jobCode: jobCode,
+                            headerFile: headerFile
+                        });
+                        
+                        console.log(`  ✓ VALID MARKER: "${clientJobText}" - Code: ${jobCode}`);
+                    } else {
+                        console.log(`  ✗ INVALID: Not a valid client-job line`);
+                    }
+                }
+            }
+            
+            console.log('\n' + '='.repeat(80));
+            console.log('MARKER SUMMARY');
+            console.log('='.repeat(80));
+            console.log(`Paragraphs with "Job Summary / Overview": ${jobSummaryCount}`);
+            console.log(`Valid JD markers: ${jdMarkers.length}`);
+            
+            if (jdMarkers.length === 0) {
+                throw new Error(`No job descriptions found. Found ${jobSummaryCount} "Job Summary / Overview" paragraphs but none had valid client-job titles.`);
+            }
+            
+            jdMarkers.forEach((m, idx) => {
+                console.log(`  ${idx + 1}. Para ${m.paraIndex}: "${m.text}" - ${m.jobCode}`);
+            });
+            
+            // STEP 6: Split and create files
+            console.log('\n' + '='.repeat(80));
+            console.log('STEP 6: CREATING FILES');
+            console.log('='.repeat(80));
+            
+            const files = [];
+            const bodyElements = Array.from(body.children);
+            
+            for (let i = 0; i < jdMarkers.length; i++) {
+                const marker = jdMarkers[i];
+                
+                // Find start index in body elements
+                let startIdx = findElementIndexByParagraphIndex(bodyElements, allParagraphs, marker.paraIndex);
+                
+                // Find end
+                let endIdx;
+                if (i + 1 < jdMarkers.length) {
+                    endIdx = findElementIndexByParagraphIndex(bodyElements, allParagraphs, jdMarkers[i + 1].paraIndex);
+                } else {
+                    endIdx = bodyElements.length;
+                }
+                
+                console.log(`  File ${i + 1}: Elements ${startIdx} to ${endIdx} (${endIdx - startIdx} elements)`);
+                
+                const chunk = bodyElements.slice(startIdx, endIdx);
+                
+                if (chunk.length === 0) {
+                    console.log(`    WARNING: Empty chunk, skipping`);
+                    continue;
+                }
+                
+                // Create filename
+                const filename = sanitizeFilename(`${marker.text} - ${marker.jobCode}.docx`);
+                console.log(`    Filename: ${filename}`);
+                
+                const blob = await createDocFromChunk(docZip, chunk, xmlDoc);
+                files.push({ name: filename, blob: blob });
+            }
+            
+            console.log('\n' + '='.repeat(80));
+            console.log(`COMPLETE: Created ${files.length} files`);
+            console.log('='.repeat(80));
+            
+            return files;
+        }
+
+        function findElementIndexByParagraphIndex(bodyElements, allParagraphs, targetParaIndex) {
+            const targetPara = allParagraphs[targetParaIndex];
+            for (let i = 0; i < bodyElements.length; i++) {
+                if (bodyElements[i] === targetPara) {
+                    return i;
+                }
+            }
+            return 0;
+        }
+
+        async function extractJobCodeFromHeader(docZip, headerFile) {
+            try {
+                const headerXml = await docZip.file(headerFile).async('string');
+                const parser = new DOMParser();
+                const headerDoc = parser.parseFromString(headerXml, 'text/xml');
+                
+                // Find all elements
+                const allElements = headerDoc.querySelectorAll('*');
+                
+                // Look for table cells containing "Code:"
+                for (let elem of allElements) {
+                    const text = getAllText(elem);
+                    if (text.includes('Code:')) {
+                        const match = text.match(/Code:\s*(.+)/i);
+                        if (match && match[1]) {
+                            return match[1].trim();
+                        }
+                    }
+                }
+            } catch (e) {
+                console.log(`Could not extract code from ${headerFile}:`, e);
+            }
+            
+            return 'UNKNOWN';
+        }
+
+        function sanitizeFilename(filename) {
+            return filename.replace(/[<>:"/\\|?*]/g, '').replace(/\s+/g, ' ').trim().substring(0, 200);
+        }
+
+        async function createDocFromChunk(docZip, chunk, originalXmlDoc) {
+            const newDoc = originalXmlDoc.cloneNode(true);
+            const newBody = newDoc.querySelector('body') || newDoc.documentElement;
+            
+            // Clear body
+            while (newBody.firstChild) {
+                newBody.removeChild(newBody.firstChild);
+            }
+            
+            // Add chunk
+            chunk.forEach(el => newBody.appendChild(el.cloneNode(true)));
+            
+            const serializer = new XMLSerializer();
+            const newDocXml = serializer.serializeToString(newDoc);
+            
+            const newZip = new JSZip();
+            const copyPromises = [];
+            
+            docZip.forEach((relativePath, file) => {
+                if (relativePath === 'word/document.xml') {
+                    newZip.file(relativePath, newDocXml);
+                } else {
+                    copyPromises.push(
+                        file.async('arraybuffer').then(content => {
+                            newZip.file(relativePath, content);
+                        })
+                    );
+                }
+            });
+            
+            await Promise.all(copyPromises);
+            return await newZip.generateAsync({type: 'blob'});
+        }
+
+        downloadBtn.addEventListener('click', async () => {
+            const zip = new JSZip();
+            processedFiles.forEach(file => zip.file(file.name, file.blob));
+            
+            const zipBlob = await zip.generateAsync({type: 'blob'});
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            saveAs(zipBlob, `TP_JobDescriptions_${timestamp}.zip`);
+            
+            showAlert('Download started!', 'success');
+        });
+
+        resetBtn.addEventListener('click', () => {
+            fileInput.value = '';
+            resetFileInput();
+            resultSection.style.display = 'none';
+            alertContainer.innerHTML = '';
+            splitBtn.disabled = false;
+            processedFiles = [];
+        });
+
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show alert-custom`;
+            alertDiv.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+            alertContainer.appendChild(alertDiv);
+            setTimeout(() => alertDiv.remove(), 5000);
+        }
+    </script>
+</body>
+</html>
