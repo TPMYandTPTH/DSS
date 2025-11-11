@@ -9,6 +9,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/docxtemplater/3.37.11/docxtemplater.js"></script>
+    <script src="https://unpkg.com/pizzip@3.1.4/dist/pizzip.js"></script>
     
     <style>
         * {
@@ -63,6 +65,30 @@
             opacity: 0.9;
         }
 
+        .nav-tabs {
+            border-bottom: 2px solid #e0e0e0;
+            margin-bottom: 0;
+        }
+
+        .nav-tabs .nav-link {
+            border: none;
+            color: #6c757d;
+            font-weight: 600;
+            padding: 15px 30px;
+            transition: all 0.3s ease;
+        }
+
+        .nav-tabs .nav-link:hover {
+            color: #3498db;
+            border-color: transparent;
+        }
+
+        .nav-tabs .nav-link.active {
+            color: #3498db;
+            background: transparent;
+            border-bottom: 3px solid #3498db;
+        }
+
         .content-section {
             padding: 40px;
         }
@@ -95,6 +121,34 @@
             margin-bottom: 20px;
         }
 
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .form-control {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            border-color: #3498db;
+            box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+        }
+
+        textarea.form-control {
+            min-height: 120px;
+            resize: vertical;
+        }
+
         .btn-custom {
             padding: 15px 40px;
             font-size: 1.1rem;
@@ -122,6 +176,17 @@
             background-color: #95a5a6;
             cursor: not-allowed;
             opacity: 0.6;
+        }
+
+        .btn-success-custom {
+            background-color: #4caf50;
+            color: white;
+        }
+
+        .btn-success-custom:hover:not(:disabled) {
+            background-color: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
         }
 
         .btn-secondary-custom {
@@ -213,7 +278,7 @@
             margin-top: 8px;
         }
 
-        #file-input {
+        #file-input, #create-file-input {
             display: none;
         }
 
@@ -288,73 +353,181 @@
                 <img src="TPLogo11.png" alt="TP Logo" class="logo" onerror="this.style.display='none'">
                 <h1>DDS</h1>
                 <p>Document Divider System</p>
-                <p style="font-size: 0.95rem; margin-top: 5px;">Split your Word documents into 2-page job descriptions</p>
+                <p style="font-size: 0.95rem; margin-top: 5px;">Split & Create Job Descriptions</p>
             </div>
 
-            <!-- Content Section -->
-            <div class="content-section">
-                <!-- Info Box -->
-                <div class="info-box">
-                    <h5><i class="fas fa-info-circle me-2"></i>How It Works</h5>
-                    <ul style="margin: 0; padding-left: 20px;">
-                        <li>Finds paragraphs with "Job Summary / Overview" + Client-Job title</li>
-                        <li>Extracts Job Code from header table</li>
-                        <li>Creates files: "Client - Job Title - Code.docx"</li>
-                        <li>Each file = exactly 2 pages</li>
-                    </ul>
-                </div>
-
-                <!-- Upload Zone -->
-                <div class="upload-zone" id="upload-zone">
-                    <div class="upload-icon">
-                        <i class="fas fa-cloud-upload-alt"></i>
-                    </div>
-                    <h4>Drop your file here or click to browse</h4>
-                    <p class="text-muted mt-2">Supported format: .docx (Max 50MB)</p>
-                    <p class="file-name" id="file-name"></p>
-                </div>
-
-                <input type="file" id="file-input" accept=".docx">
-
-                <!-- Action Button -->
-                <div class="text-center">
-                    <button class="btn-custom btn-primary-custom" id="split-btn" disabled>
-                        <i class="fas fa-cut me-2"></i>Split Document
+            <!-- Tab Navigation -->
+            <ul class="nav nav-tabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="split-tab" data-bs-toggle="tab" data-bs-target="#split-panel" type="button" role="tab">
+                        <i class="fas fa-cut me-2"></i>Split Documents
                     </button>
-                </div>
-
-                <!-- Progress Section -->
-                <div class="progress-section" id="progress-section">
-                    <div class="spinner"></div>
-                    <h5 class="text-center mt-3">Processing your document...</h5>
-                    <p class="text-center text-muted">Check browser console (F12) for detailed logs</p>
-                </div>
-
-                <!-- Alert Container -->
-                <div id="alert-container"></div>
-
-                <!-- Result Section -->
-                <div class="result-section" id="result-section">
-                    <div class="result-icon">
-                        <i class="fas fa-check-circle"></i>
-                    </div>
-                    <h3>Processing Complete!</h3>
-                    <div class="file-count" id="file-count">0</div>
-                    <p class="lead">Individual job descriptions created</p>
-                    
-                    <div class="stats-grid" id="stats-grid"></div>
-
-                    <div class="file-list" id="file-list"></div>
-
-                    <div class="mt-4">
-                        <button class="btn-custom btn-primary-custom" id="download-btn">
-                            <i class="fas fa-download me-2"></i>Download All Files (ZIP)
-                        </button>
-                    </div>
-
-                    <button class="btn-custom btn-secondary-custom mt-3" id="reset-btn">
-                        <i class="fas fa-redo me-2"></i>Process Another Document
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="create-tab" data-bs-toggle="tab" data-bs-target="#create-panel" type="button" role="tab">
+                        <i class="fas fa-file-medical me-2"></i>Create Job Description
                     </button>
+                </li>
+            </ul>
+
+            <!-- Tab Content -->
+            <div class="tab-content">
+                <!-- SPLIT TAB -->
+                <div class="tab-pane fade show active" id="split-panel" role="tabpanel">
+                    <div class="content-section">
+                        <!-- Info Box -->
+                        <div class="info-box">
+                            <h5><i class="fas fa-info-circle me-2"></i>How It Works</h5>
+                            <ul style="margin: 0; padding-left: 20px;">
+                                <li>Finds paragraphs with "Job Summary / Overview" + Client-Job title</li>
+                                <li>Extracts Job Code from header table</li>
+                                <li>Creates files: "Client - Job Title - Code.docx"</li>
+                                <li>Each file = exactly 2 pages</li>
+                            </ul>
+                        </div>
+
+                        <!-- Upload Zone -->
+                        <div class="upload-zone" id="upload-zone">
+                            <div class="upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                            </div>
+                            <h4>Drop your file here or click to browse</h4>
+                            <p class="text-muted mt-2">Supported format: .docx (Max 50MB)</p>
+                            <p class="file-name" id="file-name"></p>
+                        </div>
+
+                        <input type="file" id="file-input" accept=".docx">
+
+                        <!-- Action Button -->
+                        <div class="text-center">
+                            <button class="btn-custom btn-primary-custom" id="split-btn" disabled>
+                                <i class="fas fa-cut me-2"></i>Split Document
+                            </button>
+                        </div>
+
+                        <!-- Progress Section -->
+                        <div class="progress-section" id="progress-section">
+                            <div class="spinner"></div>
+                            <h5 class="text-center mt-3">Processing your document...</h5>
+                            <p class="text-center text-muted">Check browser console (F12) for detailed logs</p>
+                        </div>
+
+                        <!-- Alert Container -->
+                        <div id="alert-container"></div>
+
+                        <!-- Result Section -->
+                        <div class="result-section" id="result-section">
+                            <div class="result-icon">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <h3>Processing Complete!</h3>
+                            <div class="file-count" id="file-count">0</div>
+                            <p class="lead">Individual job descriptions created</p>
+                            
+                            <div class="stats-grid" id="stats-grid"></div>
+
+                            <div class="file-list" id="file-list"></div>
+
+                            <div class="mt-4">
+                                <button class="btn-custom btn-primary-custom" id="download-btn">
+                                    <i class="fas fa-download me-2"></i>Download All Files (ZIP)
+                                </button>
+                            </div>
+
+                            <button class="btn-custom btn-secondary-custom mt-3" id="reset-btn">
+                                <i class="fas fa-redo me-2"></i>Process Another Document
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CREATE TAB -->
+                <div class="tab-pane fade" id="create-panel" role="tabpanel">
+                    <div class="content-section">
+                        <!-- Info Box -->
+                        <div class="info-box">
+                            <h5><i class="fas fa-info-circle me-2"></i>Create Job Description</h5>
+                            <p class="mb-0">Upload a simple text/Word file with job details OR fill in the form below. The system will format it into your standard 2-page job description template.</p>
+                        </div>
+
+                        <!-- Upload Option -->
+                        <div class="upload-zone" id="create-upload-zone">
+                            <div class="upload-icon">
+                                <i class="fas fa-file-upload"></i>
+                            </div>
+                            <h4>Upload a file with job details (Optional)</h4>
+                            <p class="text-muted mt-2">.docx or .txt format</p>
+                            <p class="file-name" id="create-file-name"></p>
+                        </div>
+
+                        <input type="file" id="create-file-input" accept=".docx,.txt">
+
+                        <div class="text-center mb-4">
+                            <p class="text-muted">— OR —</p>
+                        </div>
+
+                        <!-- Manual Input Form -->
+                        <form id="create-form">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Client Code / Name <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control" id="client-code" placeholder="e.g., Am1, C1, XYZ Corp" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Job Code <span class="text-danger">*</span></label>
+                                        <input type="text" class="form-control" id="job-code" placeholder="e.g., T-CS-01" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Job Title <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="job-title" placeholder="e.g., Analytics Manager" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Job Description</label>
+                                <textarea class="form-control" id="job-description" placeholder="Enter the main job description..."></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Essential Job Responsibilities</label>
+                                <textarea class="form-control" id="job-responsibilities" placeholder="• Responsibility 1&#10;• Responsibility 2&#10;• Responsibility 3"></textarea>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Job Requirements</label>
+                                <textarea class="form-control" id="job-requirements" placeholder="• Requirement 1&#10;• Requirement 2&#10;• Requirement 3"></textarea>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Department / Project</label>
+                                        <input type="text" class="form-control" id="department" placeholder="e.g., Operations">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label>Location</label>
+                                        <input type="text" class="form-control" id="location" placeholder="e.g., Penang">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="text-center mt-4">
+                                <button type="submit" class="btn-custom btn-success-custom">
+                                    <i class="fas fa-file-download me-2"></i>Create Job Description
+                                </button>
+                            </div>
+                        </form>
+
+                        <!-- Alert Container for Create -->
+                        <div id="create-alert-container"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -380,6 +553,9 @@
     <script>
         document.getElementById('current-year').textContent = new Date().getFullYear();
 
+        // ==========================================
+        // SPLIT TAB FUNCTIONALITY
+        // ==========================================
         const fileInput = document.getElementById('file-input');
         const uploadZone = document.getElementById('upload-zone');
         const fileName = document.getElementById('file-name');
@@ -489,7 +665,6 @@
             }
         });
 
-        // Helper function to get all text from an element
         function getAllText(element) {
             let text = '';
             const textNodes = element.querySelectorAll('*');
@@ -501,7 +676,6 @@
             return text;
         }
 
-        // Helper function to get text from last N runs
         function getTextFromLastRuns(para, numRuns = 5) {
             const runs = para.querySelectorAll('*');
             const runElements = [];
@@ -531,7 +705,6 @@
             const xmlDoc = parser.parseFromString(docXml, 'text/xml');
             const body = xmlDoc.querySelector('body') || xmlDoc.documentElement;
             
-            // Get all paragraphs
             const allElements = body.querySelectorAll('*');
             const allParagraphs = [];
             for (let elem of allElements) {
@@ -542,7 +715,6 @@
             
             console.log(`Total paragraphs found: ${allParagraphs.length}`);
             
-            // STEP 2: Build rId to header mapping
             console.log('\n' + '='.repeat(80));
             console.log('STEP 2: BUILDING RID TO HEADER MAPPING');
             console.log('='.repeat(80));
@@ -561,7 +733,6 @@
                 }
             }
             
-            // STEP 3: Build section map
             console.log('\n' + '='.repeat(80));
             console.log('STEP 3: BUILDING SECTION MAP');
             console.log('='.repeat(80));
@@ -573,11 +744,9 @@
                 
                 for (let elem of sectPrElements) {
                     if (elem.tagName && elem.tagName.toLowerCase().endsWith(':sectpr')) {
-                        // Found section properties
                         const headerRefs = elem.querySelectorAll('*');
                         for (let headerRef of headerRefs) {
                             if (headerRef.tagName && headerRef.tagName.toLowerCase().endsWith(':headerreference')) {
-                                // Get the rId attribute
                                 const rId = headerRef.getAttribute('r:id') || 
                                            headerRef.getAttribute('w:id') ||
                                            headerRef.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
@@ -599,7 +768,6 @@
             
             console.log(`Total sections found: ${sections.length}`);
             
-            // STEP 4: Extract codes from headers
             console.log('\n' + '='.repeat(80));
             console.log('STEP 4: EXTRACTING CODES FROM HEADERS');
             console.log('='.repeat(80));
@@ -612,7 +780,6 @@
                 console.log(`  ${headerFile} -> ${code}`);
             }
             
-            // STEP 5: Find marker paragraphs
             console.log('\n' + '='.repeat(80));
             console.log('STEP 5: FINDING MARKER PARAGRAPHS');
             console.log('='.repeat(80));
@@ -624,28 +791,23 @@
                 const para = allParagraphs[i];
                 const fullText = getAllText(para);
                 
-                // Check if contains "Job Summary / Overview" or "Job Summary/ Overview"
                 if ((fullText.includes('Job Summary / Overview') || fullText.includes('Job Summary/ Overview')) &&
-                    fullText.length > 30) {  // Must have more content than just the marker
+                    fullText.length > 30) {
                     
                     jobSummaryCount++;
                     console.log(`\nPara ${i}: Contains "Job Summary / Overview"`);
                     console.log(`  Full text (first 100 chars): ${fullText.substring(0, 100)}...`);
                     
-                    // Extract text from last runs
                     const lastRunsText = getTextFromLastRuns(para, 8);
                     console.log(`  Last runs text: "${lastRunsText}"`);
                     
-                    // Clean up - remove "Job Summary / Overview"
                     let clientJobText = lastRunsText.replace(/Job Summary\s*\/?\s*Overview/gi, '').trim();
                     console.log(`  After cleanup: "${clientJobText}"`);
                     
-                    // Check if has dash and valid length
                     const hasDash = clientJobText.includes('-') || clientJobText.includes('–') || clientJobText.includes('—');
                     console.log(`  Has dash: ${hasDash}, Length: ${clientJobText.length}`);
                     
                     if (clientJobText && hasDash && clientJobText.length > 3 && clientJobText.length < 100) {
-                        // Find which section this belongs to
                         let headerFile = null;
                         for (let section of sections) {
                             if (i <= section.endPara) {
@@ -690,7 +852,6 @@
                 console.log(`  ${idx + 1}. Para ${m.paraIndex}: "${m.text}" - ${m.jobCode}`);
             });
             
-            // STEP 6: Split and create files
             console.log('\n' + '='.repeat(80));
             console.log('STEP 6: CREATING FILES');
             console.log('='.repeat(80));
@@ -701,10 +862,8 @@
             for (let i = 0; i < jdMarkers.length; i++) {
                 const marker = jdMarkers[i];
                 
-                // Find start index in body elements
                 let startIdx = findElementIndexByParagraphIndex(bodyElements, allParagraphs, marker.paraIndex);
                 
-                // Find end
                 let endIdx;
                 if (i + 1 < jdMarkers.length) {
                     endIdx = findElementIndexByParagraphIndex(bodyElements, allParagraphs, jdMarkers[i + 1].paraIndex);
@@ -721,7 +880,6 @@
                     continue;
                 }
                 
-                // Create filename
                 const filename = sanitizeFilename(`${marker.text} - ${marker.jobCode}.docx`);
                 console.log(`    Filename: ${filename}`);
                 
@@ -752,10 +910,8 @@
                 const parser = new DOMParser();
                 const headerDoc = parser.parseFromString(headerXml, 'text/xml');
                 
-                // Find all elements
                 const allElements = headerDoc.querySelectorAll('*');
                 
-                // Look for table cells containing "Code:"
                 for (let elem of allElements) {
                     const text = getAllText(elem);
                     if (text.includes('Code:')) {
@@ -780,12 +936,10 @@
             const newDoc = originalXmlDoc.cloneNode(true);
             const newBody = newDoc.querySelector('body') || newDoc.documentElement;
             
-            // Clear body
             while (newBody.firstChild) {
                 newBody.removeChild(newBody.firstChild);
             }
             
-            // Add chunk
             chunk.forEach(el => newBody.appendChild(el.cloneNode(true)));
             
             const serializer = new XMLSerializer();
@@ -835,6 +989,233 @@
             alertDiv.className = `alert alert-${type} alert-dismissible fade show alert-custom`;
             alertDiv.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
             alertContainer.appendChild(alertDiv);
+            setTimeout(() => alertDiv.remove(), 5000);
+        }
+
+        // ==========================================
+        // CREATE TAB FUNCTIONALITY
+        // ==========================================
+        const createFileInput = document.getElementById('create-file-input');
+        const createUploadZone = document.getElementById('create-upload-zone');
+        const createFileName = document.getElementById('create-file-name');
+        const createForm = document.getElementById('create-form');
+        const createAlertContainer = document.getElementById('create-alert-container');
+
+        let createSelectedFile = null;
+
+        createUploadZone.addEventListener('click', () => createFileInput.click());
+        createUploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            createUploadZone.classList.add('dragover');
+        });
+        createUploadZone.addEventListener('dragleave', () => createUploadZone.classList.remove('dragover'));
+        createUploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            createUploadZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length > 0) {
+                createFileInput.files = e.dataTransfer.files;
+                handleCreateFileSelect();
+            }
+        });
+
+        createFileInput.addEventListener('change', handleCreateFileSelect);
+
+        async function handleCreateFileSelect() {
+            if (createFileInput.files.length > 0) {
+                createSelectedFile = createFileInput.files[0];
+                createFileName.textContent = createSelectedFile.name;
+                
+                // Try to parse the file and populate form
+                try {
+                    const text = await createSelectedFile.text();
+                    parseAndFillForm(text);
+                } catch (e) {
+                    console.log('Could not parse file:', e);
+                }
+            }
+        }
+
+        function parseAndFillForm(text) {
+            // Simple parsing logic
+            const lines = text.split('\n');
+            let currentSection = '';
+            let jobTitle = '';
+            let jobDesc = '';
+            let responsibilities = '';
+            let requirements = '';
+
+            for (let line of lines) {
+                line = line.trim();
+                
+                if (line.toLowerCase().includes('job title') && line.includes(':')) {
+                    jobTitle = line.split(':')[1].trim();
+                } else if (line.toLowerCase() === 'job description') {
+                    currentSection = 'description';
+                } else if (line.toLowerCase().includes('essential') && line.toLowerCase().includes('responsib')) {
+                    currentSection = 'responsibilities';
+                } else if (line.toLowerCase().includes('job requirement') || line.toLowerCase().includes('requirements')) {
+                    currentSection = 'requirements';
+                } else if (line) {
+                    if (currentSection === 'description') {
+                        jobDesc += line + '\n';
+                    } else if (currentSection === 'responsibilities') {
+                        responsibilities += line + '\n';
+                    } else if (currentSection === 'requirements') {
+                        requirements += line + '\n';
+                    }
+                }
+            }
+
+            // Fill form
+            if (jobTitle) document.getElementById('job-title').value = jobTitle;
+            if (jobDesc) document.getElementById('job-description').value = jobDesc.trim();
+            if (responsibilities) document.getElementById('job-responsibilities').value = responsibilities.trim();
+            if (requirements) document.getElementById('job-requirements').value = requirements.trim();
+        }
+
+        createForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const jobData = {
+                clientCode: document.getElementById('client-code').value.trim(),
+                jobCode: document.getElementById('job-code').value.trim(),
+                jobTitle: document.getElementById('job-title').value.trim(),
+                jobDescription: document.getElementById('job-description').value.trim(),
+                responsibilities: document.getElementById('job-responsibilities').value.trim(),
+                requirements: document.getElementById('job-requirements').value.trim(),
+                department: document.getElementById('department').value.trim() || 'Operations',
+                location: document.getElementById('location').value.trim() || 'Penang'
+            };
+
+            if (!jobData.clientCode || !jobData.jobCode || !jobData.jobTitle) {
+                showCreateAlert('Please fill in all required fields (Client Code, Job Code, Job Title)', 'danger');
+                return;
+            }
+
+            try {
+                await createJobDescription(jobData);
+                showCreateAlert('Job description created successfully!', 'success');
+            } catch (error) {
+                console.error('Error creating job description:', error);
+                showCreateAlert('Error: ' + error.message, 'danger');
+            }
+        });
+
+        async function createJobDescription(data) {
+            // Create a new Word document from scratch
+            const zip = new JSZip();
+
+            // Create the basic .docx structure
+            // [Content_Types].xml
+            zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+    <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+    <Default Extension="xml" ContentType="application/xml"/>
+    <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+    <Override PartName="/word/header1.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"/>
+</Types>`);
+
+            // _rels/.rels
+            zip.folder('_rels').file('.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+    <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`);
+
+            // word/_rels/document.xml.rels
+            zip.folder('word').folder('_rels').file('document.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+    <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>
+</Relationships>`);
+
+            // word/header1.xml - Header with job info table
+            zip.folder('word').file('header1.xml', createHeaderXML(data));
+
+            // word/document.xml - Main document content
+            zip.folder('word').file('document.xml', createDocumentXML(data));
+
+            // Generate and download
+            const blob = await zip.generateAsync({type: 'blob'});
+            const filename = `${data.clientCode} - ${data.jobTitle} - ${data.jobCode}.docx`;
+            saveAs(blob, filename);
+        }
+
+        function createHeaderXML(data) {
+            return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+    <w:tbl>
+        <w:tr>
+            <w:tc><w:p><w:r><w:t>    </w:t></w:r></w:p></w:tc>
+            <w:tc><w:p><w:r><w:t>Job Description</w:t></w:r></w:p></w:tc>
+            <w:tc><w:p><w:r><w:t>Code: ${data.jobCode}</w:t></w:r></w:p></w:tc>
+        </w:tr>
+        <w:tr>
+            <w:tc><w:p><w:r><w:t>    </w:t></w:r></w:p></w:tc>
+            <w:tc><w:p><w:r><w:t>Job Description</w:t></w:r></w:p></w:tc>
+            <w:tc><w:p><w:r><w:t>Version: 2</w:t></w:r></w:p></w:tc>
+        </w:tr>
+        <w:tr>
+            <w:tc><w:p><w:r><w:t>    </w:t></w:r></w:p></w:tc>
+            <w:tc><w:p><w:r><w:t>Capacidad:5.5 Human Resources</w:t></w:r></w:p></w:tc>
+            <w:tc><w:p><w:r><w:t>Page: 1 de 1</w:t></w:r></w:p></w:tc>
+        </w:tr>
+    </w:tbl>
+</w:hdr>`;
+        }
+
+        function createDocumentXML(data) {
+            // Format responsibilities and requirements as bullet points
+            const respLines = data.responsibilities.split('\n').filter(l => l.trim());
+            const reqLines = data.requirements.split('\n').filter(l => l.trim());
+
+            const respXML = respLines.map(line => {
+                const text = line.replace(/^[•\-\*]\s*/, '');
+                return `<w:p><w:pPr><w:pStyle w:val="ListParagraph"/></w:pPr><w:r><w:t>• ${escapeXML(text)}</w:t></w:r></w:p>`;
+            }).join('');
+
+            const reqXML = reqLines.map(line => {
+                const text = line.replace(/^[•\-\*]\s*/, '');
+                return `<w:p><w:pPr><w:pStyle w:val="ListParagraph"/></w:pPr><w:r><w:t>• ${escapeXML(text)}</w:t></w:r></w:p>`;
+            }).join('');
+
+            return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+    <w:body>
+        <w:p><w:r><w:t>Job Summary / Overview</w:t></w:r><w:r><w:t>${escapeXML(data.clientCode)} - ${escapeXML(data.jobTitle)}</w:t></w:r></w:p>
+        
+        <w:p><w:r><w:t>Job Title: ${escapeXML(data.jobTitle)}</w:t></w:r></w:p>
+        <w:p><w:r><w:t>Department Project/Client: ${escapeXML(data.department)}</w:t></w:r></w:p>
+        <w:p><w:r><w:t>Location: ${escapeXML(data.location)}</w:t></w:r></w:p>
+        
+        <w:p><w:pPr><w:spacing w:before="240"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>Job Description</w:t></w:r></w:p>
+        <w:p><w:r><w:t>${escapeXML(data.jobDescription)}</w:t></w:r></w:p>
+        
+        <w:p><w:pPr><w:spacing w:before="240"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>Essential Job Responsibilities</w:t></w:r></w:p>
+        ${respXML}
+        
+        <w:p><w:pPr><w:spacing w:before="240"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>Job Requirements</w:t></w:r></w:p>
+        ${reqXML}
+        
+        <w:sectPr>
+            <w:headerReference w:type="default" r:id="rId1" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/>
+        </w:sectPr>
+    </w:body>
+</w:document>`;
+        }
+
+        function escapeXML(text) {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+        }
+
+        function showCreateAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show alert-custom`;
+            alertDiv.innerHTML = `${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
+            createAlertContainer.appendChild(alertDiv);
             setTimeout(() => alertDiv.remove(), 5000);
         }
     </script>
